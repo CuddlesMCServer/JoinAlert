@@ -4,7 +4,6 @@ local JoinAlert = lukkit.addPlugin("JoinAlert", "v1.0",
             function()
                 plugin.config.setDefault("config")
                 plugin.config.setDefault("alerts")
-                plugin.config.setDefault("config.alerts", 0)
                 plugin.config.setDefault("config.permission", "joinalert.notify")
                 plugin.config.setDefault("config.message.created", "§aStaff will be notified if {name} joins later.")
                 plugin.config.setDefault("config.message.cleared", "§cStaff will not be notified if {name} joins later.")
@@ -21,8 +20,9 @@ local JoinAlert = lukkit.addPlugin("JoinAlert", "v1.0",
                 local player = event:getPlayer()
                 local uuid = player:getUniqueId():toString()
                 if plugin.config.get("alerts."..uuid..".track") == true then
-                    plugin.config.set("alerts."..uuid..".join", "%A %d %B %Y - %r")
+                    plugin.config.set("alerts."..uuid..".join", os.date("%A %d %B %Y - %I:%M:%S %p"))
                     plugin.config.save()
+                    server:broadcast("§c"..player:getName().." is being tracked", plugin.config.get("config.permission"))
                 end
             end
         )
@@ -31,14 +31,14 @@ local JoinAlert = lukkit.addPlugin("JoinAlert", "v1.0",
             function(event)
                 local uuid = event:getPlayer():getUniqueId():toString()
                 if plugin.config.get("alerts."..uuid..".track") == true then
-                    plugin.config.set("alerts."..uuid..".quit", "%A %d %B %Y - %r")
+                    plugin.config.set("alerts."..uuid..".quit", os.date("%A %d %B %Y - %I:%M:%S %p"))
                     plugin.config.set("alerts."..uuid..".track", false)
                     plugin.config.save()
                     local message = "Alert: The user {name} was on from: {join}, to: {quit}"
-                    message = string.gsub(message, "{name}", event:getPlayer():getName(){)
-                    message = string.gsub(message, "{join}", plugin.config.get("alerts."..uuid..".join"))
-                    message = string.gsub(message, "{quit}", plugin.config.get("alerts."..uuid..".quit"))
-                    server:dispatchCommand("mail send Lord_Cuddles "..message)
+                    message = string.gsub(message, "{name}", event:getPlayer():getName())
+                    message = string.gsub(message, "{join}", plugin.config.get("alerts."..uuid..".join") )
+                    message = string.gsub(message, "{quit}", plugin.config.get("alerts."..uuid..".quit") )
+                    server:dispatchCommand( server:getConsoleSender(), "essentials:mail send Lord_Cuddles "..message)
                 end
             end
         )
@@ -49,6 +49,7 @@ local JoinAlert = lukkit.addPlugin("JoinAlert", "v1.0",
                     if args[1] then
                         local offline = server:getOfflinePlayer(args[1])
                         if offline:isOnline() or offline:hasPlayedBefore() then
+                            local uuid = offline:getUniqueId():toString()
                             if plugin.config.get("alerts."..uuid..".track") == true then
                                 plugin.config.clear("alerts."..uuid )
                                 plugin.config.save()
