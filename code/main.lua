@@ -1,72 +1,226 @@
-local JoinAlert = lukkit.addPlugin("JoinAlert", "v1.0",
-    function(plugin)
+local JoinAlert = lukkit.addPlugin("JoinAlert", "v2.0",
+    function( plugin )
+        
         plugin.onEnable(
             function()
-                plugin.config.setDefault("config")
-                plugin.config.setDefault("alerts")
-                plugin.config.setDefault("config.permission", "joinalert.notify")
-                plugin.config.setDefault("config.message.created", "§aStaff will be notified if {name} joins later.")
-                plugin.config.setDefault("config.message.cleared", "§cStaff will not be notified if {name} joins later.")
-                plugin.config.setDefault("config.message.joiner", "§eYou have triggered a login alert!")
-                plugin.config.setDefault("config.message.joined", "§bThe player {name} has triggered a login alert!")
-                plugin.config.setDefault("config.message.offlined", "§bThe player {name} joined the server at {date}")
+                
+                -- This is the permission required to create and manage alerts
+                plugin.config.setDefault("config.permission", "joinalert.alerts")
+                
+                -- This is what will be tracked for the session
+                plugin.config.setDefault("config.logging.join", true) -- Log what date and time the player joins
+                plugin.config.setDefault("config.logging.quit", true) -- Log what date and time the player quits
+                plugin.config.setDefault("config.logging.chat", true) -- Log all chat messages the user sends
+                plugin.config.setDefault("config.logging.blocks", true) -- Log data of all blocks broken and placed
+                
+                -- This is what messages will be sent in different circumstances
+                plugin.config.setDefault("config.message.create", "&c{name} is now being tracked by {sender}")
+                plugin.config.setDefault("config.message.cancel", "&c{sender} cancelled tracking for {name}")
+                plugin.config.setDefault("config.message.alert", "&c{name} is being tracked by {sender}")
+                plugin.config.setDefault("config.message.usage", "&cUsage: /alert {username}")
                 plugin.config.save()
-                plugin.print("Enabled version "..plugin.version.." successfully")
+                
+                plugin.print("Enabled successfully version "..plugin.version)
+                
             end
         )
         
-        events.add("playerJoin",
+        plugin.onDisable(
+            function()
+                
+                plugin.print("Disabled successfully, tracking may not work")
+            
+            end
+        )
+        
+        plugin.addCommand("alert", "Create or cancel player alerts", "/alert {username}",
+            function(sender, args)
+                if sender:hasPermission(plugin.config.get("config.permission")) == true then
+                    if args[1] then
+                        local offline = server:getOfflinePlayer(args[1])
+                        if offline:hasPlayedBefore() or offline:isOnline() then
+                            local uuid = offline:getUniqueId():toString()
+                            
+                            if plugin.config.get(uuid..".stage") == 1 then
+                                plugin.config.clear(uuid)
+                                plugin.config.save()
+                                
+                                local message = plugin.config.get("config.message.cancel")
+                                message = string.gsub(message, "{name}", offline:getName())
+                                message = string.gsub(message, "{sender}", sender:getName())
+                                message = string.gsub(message, "&", "§")
+                                server:broadcast(message, plugin.config.get("config.permission"))
+                                
+                            elseif plugin.config.get(uuid..".stage") == 2 then
+                                plugin.config.clear(uuid)
+                                plugin.config.save()
+                                
+                                local message = plugin.config.get("config.message.cancel")
+                                message = string.gsub(message, "{name}", offline:getName())
+                                message = string.gsub(message, "{sender}", sender:getName())
+                                message = string.gsub(message, "&", "§")
+                                server:broadcast(message, plugin.config.get("config.permission"))
+                                
+                            elseif plugin.config.get(uuid..".stage") == 3 then
+                                if args[2] == "clear" then
+                                    plugin.config.clear(uuid)
+                                    plugin.config.save()
+                                    
+                                    local message = plugin.config.get("config.message.cancel")
+                                    message = string.gsub(message, "{name}", offline:getName())
+                                    message = string.gsub(message, "{sender}", sender:getName())
+                                    message = string.gsub(message, "&", "§")
+                                    server:broadcast(message, plugin.config.get("config.permission"))
+                                    
+                                else
+                                    sender:sendMessage("§6=============== "..offline:getName().." ===============")
+                                    sender:sendMessage("§eUnique User ID: "..uuid)
+                                    if plugin.config.get(uuid..".join") then 
+                                        sender:sendMessage("§eJoin time: §f"..plugin.config.get(uuid..".join")) 
+                                    end
+                                    if plugin.config.get(uuid..".quit") then
+                                        sender:sendMessage("§eQuit time: §f"..plugin.config.get(uuid..".quit"))
+                                    end
+                                    if plugin.config.get(uuid..".blockbreaks") or plugin.config.get(uuid.."blockplaces") then
+                                        plugin.config.setDefault(uuid..".blockbreaks", 0)
+                                        plugin.config.setDefault(uuid..".blockplaces", 0)
+                                        plugin.config.save()
+                                        sender:sendMessage("§eBlocks Broken/Placed: "..plugin.config.get(uuid..".blockbreaks").."/"..plugin.config.get(uuid..".blockplaces"))
+                                    end
+                                    if plugin.config.get(uuid..".chats") then
+                                        sender:sendMessage("§eUser spoke "..plugin.config.get(uuid..".chats").." messages whilst online")
+                                    end
+                                end
+                            else
+                                plugin.config.set(uuid.."..stage", 1)
+                                plugin.config.set(uuid..".creator", sender:getName())
+                                plugin.config.save()
+                                
+                                local message = plugin.config.get("config.message.create")
+                                message = string.gsub(message, "{name}", offline:getName())
+                                message = string.gsub(message, "{sender}", sender:getName())
+                                message = string.gsub(message, "&", "§")
+                                server:broadcast(message, plugin.config.get("config.permission"))
+                            end
+                        else
+                            sender:sendMessage("§cThe player "..offline:getName().." has never played before")
+                        end
+                    else
+                        local message = plugin.config.get("config.message.usage")
+                        message = string.gsub(message, "&", "§")
+                        sender:sendMessage(message)
+                    end
+                else
+                    sender:sendMessage("§cYou need the \""..plugin.config.get("config.permission").."\" permission to do that")
+                end
+            end
+        )
+        
+        events.add("playerJoin", 
             function(event)
+                
                 local player = event:getPlayer()
                 local uuid = player:getUniqueId():toString()
-                if plugin.config.get("alerts."..uuid..".track") == true then
-                    plugin.config.set("alerts."..uuid..".join", os.date("%A %d %B %Y - %I:%M:%S %p"))
+                
+                if plugin.config.get(uuid..".stage") == 1 then
+                    
+                    plugin.config.set(uuid..".stage", 2)
+                    
+                    if plugin.config.get("config.logging.join") == true then
+                        plugin.config.set(uuid..".join", os.date("%A %d %B - %X"))
+                        plugin.print("Join data is being logged for this player!")
+                    end
+                    
                     plugin.config.save()
-                    server:broadcast("§c"..player:getName().." is being tracked", plugin.config.get("config.permission"))
+                    
+                    local message = plugin.config.get("config.message.alert")
+                    message = string.gsub(message, "{name}", player:getName())
+                    message = string.gsub(message, "{sender}", plugin.config.get(uuid..".creator"))
+                    message = string.gsub(message, "&", "§")
+                    server:broadcast(message, plugin.config.get("config.permission"))
+                    
                 end
+                
             end
         )
         
         events.add("playerQuit",
             function(event)
-                local uuid = event:getPlayer():getUniqueId():toString()
-                if plugin.config.get("alerts."..uuid..".track") == true then
-                    plugin.config.set("alerts."..uuid..".quit", os.date("%A %d %B %Y - %I:%M:%S %p"))
-                    plugin.config.set("alerts."..uuid..".track", false)
+                
+                local player = event:getPlayer()
+                local uuid = player:getUniqueId():toString()
+                
+                if plugin.config.get(uuid..".stage") == 2 then
+                    
+                    plugin.config.set(uuid..".stage", 3)
+                    
+                    if plugin.config.get("config.logging.quit") == true then
+                        plugin.config.set(uuid..".quit", os.date("%A %d %B - %X"))
+                        plugin.print("Quit data is being logged for this player!")
+                    end
+                    
                     plugin.config.save()
-                    local message = "Alert: The user {name} was on from: {join}, to: {quit}"
-                    message = string.gsub(message, "{name}", event:getPlayer():getName())
-                    message = string.gsub(message, "{join}", plugin.config.get("alerts."..uuid..".join") )
-                    message = string.gsub(message, "{quit}", plugin.config.get("alerts."..uuid..".quit") )
-                    server:dispatchCommand( server:getConsoleSender(), "essentials:mail send Lord_Cuddles "..message)
+                    
+                    local message = plugin.config.get("config.message.alert")
+                    message = string.gsub(message, "{name}", player:getName())
+                    message = string.gsub(message, "{sender}", plugin.config.get(uuid..".creator"))
+                    message = string.gsub(message, "&", "§")
+                    server:broadcast(message, plugin.config.get("config.permission"))
+                    
+                end
+                
+            end
+        )
+        
+        events.add("blockBreak",
+            function(event)
+                
+                local player = event:getPlayer()
+                local uuid = player:getUniqueId():toString()
+                
+                if plugin.config.get(uuid..".stage") == 2 then
+                    if plugin.config.get("config.logging.blocks") == true then
+                        plugin.config.setDefault(uuid..".blockbreaks", 0)
+                        plugin.config.save()
+                        plugin.config.set(uuid..".blockbreaks", plugin.config.get(uuid..".blockbreaks") + 1)
+                        plugin.config.save()
+                    end
                 end
             end
         )
         
-        plugin.addCommand("alert", "Start or cancel a session alert for a player", "/alert {name} {type}",
-            function(sender, args)
-                if sender:hasPermission(plugin.config.get("config.permission")) == true then
-                    if args[1] then
-                        local offline = server:getOfflinePlayer(args[1])
-                        if offline:isOnline() or offline:hasPlayedBefore() then
-                            local uuid = offline:getUniqueId():toString()
-                            if plugin.config.get("alerts."..uuid..".track") == true then
-                                plugin.config.clear("alerts."..uuid )
-                                plugin.config.save()
-                                sender:sendMessage("§cYou cancelled tracking for "..args[1])
-                            else
-                                plugin.config.set("alerts."..uuid..".track", true)
-                                plugin.config.save()
-                                sender:sendMessage("§cNow tracking "..args[1])
-                            end
-                        else
-                            sender:sendMessage("§cThis player has never played before")
-                        end
-                    else
-                        sender:sendMessage("§c/alert {username} - Toggles alerts for the username")
+        events.add("blockPlace",
+            function(event)
+                
+                local player = event:getPlayer()
+                local uuid = player:getUniqueId():toString()
+                
+                if plugin.config.get(uuid..".stage") == 2 then
+                    if plugin.config.get("config.logging.blocks") == true then
+                        plugin.config.setDefault(uuid..".blockplaces", 0)
+                        plugin.config.save()
+                        plugin.config.set(uuid..".blockplaces", plugin.config.get(uuid..".blockplaces") + 1)
+                        plugin.config.save()
                     end
-                else
-                    sender:sendMessage("§cYou do not have permission to do that")
+                end
+            end
+        )
+        
+        events.add("asyncPlayerChat",
+            function(event)
+                
+                local player = event:getPlayer()
+                local uuid = player:getUniqueId():toString()
+                if plugin.config.get(uuid..".stage") == 2 then
+                    if plugin.config.get("config.logging.chat") == true then
+                        plugin.config.setDefault(uuid..".chats", 0)
+                        plugin.config.save()
+                        plugin.config.set(uuid..".chats", plugin.config.get(uuid..".chats") + 1)
+                        plugin.config.save()
+                        
+                        plugin.config.set(uuid..".chat"..plugin.config.get(uuid..".chats"), "["..os.date("%d%b-%X").."] "..event:getMessage())
+                        plugin.config.save()
+                    end
                 end
             end
         )
