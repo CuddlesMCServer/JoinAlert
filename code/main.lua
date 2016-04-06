@@ -40,39 +40,75 @@ local JoinAlert = lukkit.addPlugin("JoinAlert", "v2.0",
                         local offline = server:getOfflinePlayer(args[1])
                         if offline:hasPlayedBefore() or offline:isOnline() then
                             local uuid = offline:getUniqueId():toString()
+                            
                             if plugin.config.get(uuid..".stage") == 1 then
                                 plugin.config.clear(uuid)
                                 plugin.config.save()
-                                sender:sendMessage("§cYou have cancelled next login alert for "..offline:getName())
+                                
+                                local message = plugin.config.get("config.message.cancel")
+                                message = string.gsub(message, "{name}", offline:getName())
+                                message = string.gsub(message, "{sender}", sender:getName())
+                                message = string.gsub(message, "&", "§")
+                                server:broadcast(message, plugin.config.get("config.permission"))
+                                
                             elseif plugin.config.get(uuid..".stage") == 2 then
                                 plugin.config.clear(uuid)
                                 plugin.config.save()
-                                sender:sendMessage("§cYou have cancelled the current login event for "..offline:getName())
+                                
+                                local message = plugin.config.get("config.message.cancel")
+                                message = string.gsub(message, "{name}", offline:getName())
+                                message = string.gsub(message, "{sender}", sender:getName())
+                                message = string.gsub(message, "&", "§")
+                                server:broadcast(message, plugin.config.get("config.permission"))
+                                
                             elseif plugin.config.get(uuid..".stage") == 3 then
-                                sender:sendMessage("§6=============== "..offline:getName().." ===============")
-                                sender:sendMessage("§eUnique User ID: "..uuid)
-                                if plugin.config.get(uuid..".join") then 
-                                    sender:sendMessage("§eJoin time: §f"..plugin.config.get(uuid..".join")) 
-                                end
-                                if plugin.config.get(uuid..".quit") then
-                                    sender:sendMessage("§eQuit time: §f"..plugin.config.get(uuid..".quit"))
-                                end
-                                if plugin.config.get(uuid..".blockbreaks") or plugin.config.get(uuid.."blockplaces") then
-                                    plugin.config.setDefault(uuid..".blockbreaks", 0)
-                                    plugin.config.setDefault(uuid..".blockplaces", 0)
+                                if args[2] == "clear" then
+                                    plugin.config.clear(uuid)
                                     plugin.config.save()
-                                    sender:sendMessage("§eBlocks Broken/Placed: "..plugin.config.get(uuid..".blockbreaks").."/"..plugin.config.get(uuid..".blockplaces"))
+                                    
+                                    local message = plugin.config.get("config.message.cancel")
+                                    message = string.gsub(message, "{name}", offline:getName())
+                                    message = string.gsub(message, "{sender}", sender:getName())
+                                    message = string.gsub(message, "&", "§")
+                                    server:broadcast(message, plugin.config.get("config.permission"))
+                                    
+                                else
+                                    sender:sendMessage("§6=============== "..offline:getName().." ===============")
+                                    sender:sendMessage("§eUnique User ID: "..uuid)
+                                    if plugin.config.get(uuid..".join") then 
+                                        sender:sendMessage("§eJoin time: §f"..plugin.config.get(uuid..".join")) 
+                                    end
+                                    if plugin.config.get(uuid..".quit") then
+                                        sender:sendMessage("§eQuit time: §f"..plugin.config.get(uuid..".quit"))
+                                    end
+                                    if plugin.config.get(uuid..".blockbreaks") or plugin.config.get(uuid.."blockplaces") then
+                                        plugin.config.setDefault(uuid..".blockbreaks", 0)
+                                        plugin.config.setDefault(uuid..".blockplaces", 0)
+                                        plugin.config.save()
+                                        sender:sendMessage("§eBlocks Broken/Placed: "..plugin.config.get(uuid..".blockbreaks").."/"..plugin.config.get(uuid..".blockplaces"))
+                                    end
+                                    if plugin.config.get(uuid..".chats") then
+                                        sender:sendMessage("§eUser spoke "..plugin.config.get(uuid..".chats").." messages whilst online")
+                                    end
                                 end
-                                if plugin.config.get(uuid..".chats") then
-                                    sender:sendMessage("§eUser spoke "..plugin.config.get(uuid..".chats").." messages whilst online")
-                                end
-                            elseif 
+                            else
+                                plugin.config.set(uuid.."..stage", 1)
+                                plugin.config.set(uuid..".creator", sender:getName())
+                                plugin.config.save()
+                                
+                                local message = plugin.config.get("config.message.create")
+                                message = string.gsub(message, "{name}", offline:getName())
+                                message = string.gsub(message, "{sender}", sender:getName())
+                                message = string.gsub(message, "&", "§")
+                                server:broadcast(message, plugin.config.get("config.permission"))
                             end
                         else
                             sender:sendMessage("§cThe player "..offline:getName().." has never played before")
                         end
                     else
-                        sender:sendMessage(plugin.config.get("config.message.usage"))
+                        local message = plugin.config.get("config.message.usage")
+                        message = string.gsub(message, "&", "§")
+                        sender:sendMessage(message)
                     end
                 else
                     sender:sendMessage("§cYou need the \""..plugin.config.get("config.permission").."\" permission to do that")
@@ -99,7 +135,7 @@ local JoinAlert = lukkit.addPlugin("JoinAlert", "v2.0",
                     
                     local message = plugin.config.get("config.message.alert")
                     message = string.gsub(message, "{name}", player:getName())
-                    message = string.gsub(message, "{sender}", plugin.config.get(uuid..".created"))
+                    message = string.gsub(message, "{sender}", plugin.config.get(uuid..".creator"))
                     message = string.gsub(message, "&", "§")
                     server:broadcast(message, plugin.config.get("config.permission"))
                     
@@ -127,7 +163,7 @@ local JoinAlert = lukkit.addPlugin("JoinAlert", "v2.0",
                     
                     local message = plugin.config.get("config.message.alert")
                     message = string.gsub(message, "{name}", player:getName())
-                    message = string.gsub(message, "{sender}", plugin.config.get(uuid..".created"))
+                    message = string.gsub(message, "{sender}", plugin.config.get(uuid..".creator"))
                     message = string.gsub(message, "&", "§")
                     server:broadcast(message, plugin.config.get("config.permission"))
                     
@@ -142,13 +178,14 @@ local JoinAlert = lukkit.addPlugin("JoinAlert", "v2.0",
                 local player = event:getPlayer()
                 local uuid = player:getUniqueId():toString()
                 
-                if plugin.config.get("config.logging.blocks") == true then
-                    plugin.config.setDefault(uuid..".blockbreaks", 0)
-                    plugin.config.save()
-                    plugin.config.set(uuid..".blockbreaks", plugin.config.get(uuid..".blockbreaks") + 1)
-                    plugin.config.save()
+                if plugin.config.get(uuid..".stage") == 2 then
+                    if plugin.config.get("config.logging.blocks") == true then
+                        plugin.config.setDefault(uuid..".blockbreaks", 0)
+                        plugin.config.save()
+                        plugin.config.set(uuid..".blockbreaks", plugin.config.get(uuid..".blockbreaks") + 1)
+                        plugin.config.save()
+                    end
                 end
-                
             end
         )
         
@@ -158,13 +195,14 @@ local JoinAlert = lukkit.addPlugin("JoinAlert", "v2.0",
                 local player = event:getPlayer()
                 local uuid = player:getUniqueId():toString()
                 
-                if plugin.config.get("config.logging.blocks") == true then
-                    plugin.config.setDefault(uuid..".blockplaces", 0)
-                    plugin.config.save()
-                    plugin.config.set(uuid..".blockplaces", plugin.config.get(uuid..".blockbreaks") + 1)
-                    plugin.config.save()
+                if plugin.config.get(uuid..".stage") == 2 then
+                    if plugin.config.get("config.logging.blocks") == true then
+                        plugin.config.setDefault(uuid..".blockplaces", 0)
+                        plugin.config.save()
+                        plugin.config.set(uuid..".blockplaces", plugin.config.get(uuid..".blockplaces") + 1)
+                        plugin.config.save()
+                    end
                 end
-                
             end
         )
         
@@ -173,15 +211,16 @@ local JoinAlert = lukkit.addPlugin("JoinAlert", "v2.0",
                 
                 local player = event:getPlayer()
                 local uuid = player:getUniqueId():toString()
-                
-                if plugin.config.get("config.logging.chat") == true then
-                    plugin.config.setDefault(uuid..".chats", 0)
-                    plugin.config.save()
-                    plugin.config.set(uuid..".chats", plugin.config.get(uuid..".chats") + 1)
-                    plugin.config.save()
-                    
-                    plugin.config.set(uuid..".chat"..plugin.config.get(uuid..".chats"), os.date("["..os.date("%d%b-%X").."] "..event:getMessage())
-                    plugin.config.save()
+                if plugin.config.get(uuid..".stage") == 2 then
+                    if plugin.config.get("config.logging.chat") == true then
+                        plugin.config.setDefault(uuid..".chats", 0)
+                        plugin.config.save()
+                        plugin.config.set(uuid..".chats", plugin.config.get(uuid..".chats") + 1)
+                        plugin.config.save()
+                        
+                        plugin.config.set(uuid..".chat"..plugin.config.get(uuid..".chats"), "["..os.date("%d%b-%X").."] "..event:getMessage())
+                        plugin.config.save()
+                    end
                 end
             end
         )
